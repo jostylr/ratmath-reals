@@ -1,0 +1,13 @@
+{
+    "name": "@ratmath/rat-real",
+    "version": "0.1.0",
+    "description": "Transcendental functions and real number operations for RatMath",
+    "main": "src/index.js",
+    "type": "module",
+    "dependencies": {
+        "@ratmath/core": "workspace:*"
+    },
+    "devDependencies": {
+        "bun-types": "latest"
+    }
+}
