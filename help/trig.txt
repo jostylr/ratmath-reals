@@ -1,0 +1,41 @@
+Trigonometric Functions - Reals Package
+
+All angles are in RADIANS.
+
+BASIC TRIG FUNCTIONS:
+  Sin(x, [precision])     - Sine of x
+  Cos(x, [precision])     - Cosine of x
+  Tan(x, [precision])     - Tangent of x (undefined at π/2 + nπ)
+
+INVERSE TRIG FUNCTIONS:
+  Arcsin(x, [prec])       - Inverse sine, returns [-π/2, π/2]
+                            Domain: |x| ≤ 1
+  Arccos(x, [prec])       - Inverse cosine, returns [0, π]
+                            Domain: |x| ≤ 1
+  Arctan(x, [prec])       - Inverse tangent, returns (-π/2, π/2)
+                            Domain: all real numbers
+
+CONVERTING DEGREES TO RADIANS:
+  radians = degrees * PI() / 180
+
+COMMON VALUES:
+  Sin(0)           → 0
+  Sin(PI()/6)      → 1/2       (30°)
+  Sin(PI()/4)      → √2/2      (45°)
+  Sin(PI()/3)      → √3/2      (60°)
+  Sin(PI()/2)      → 1         (90°)
+
+  Cos(0)           → 1
+  Cos(PI()/3)      → 1/2       (60°)
+  Cos(PI()/2)      → 0         (90°)
+  Cos(PI())        → -1        (180°)
+
+IDENTITIES (verified by interval arithmetic):
+  Sin(x)^2 + Cos(x)^2 = 1
+  Sin(2x) = 2*Sin(x)*Cos(x)
+  Cos(2x) = Cos(x)^2 - Sin(x)^2
+
+EXAMPLES:
+  Sin(PI()/4)             → ~0.7071... (√2/2)
+  Arcsin(1/2)             → ~0.5236... (π/6)
+  Tan(PI()/4)             → ~1

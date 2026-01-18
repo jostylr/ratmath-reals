@@ -1,0 +1,44 @@
+Reals Package - Real Number Approximations
+
+This package provides transcendental functions computed via rational interval
+arithmetic. Results are returned as rational intervals that bound the true value.
+
+CONSTANTS:
+  PI([precision])         - Returns π ≈ 3.14159...
+  E([precision])          - Returns e ≈ 2.71828...
+
+EXPONENTIAL & LOGARITHM:
+  Exp(x, [precision])     - Computes e^x
+  Ln(x, [precision])      - Natural logarithm of x (x > 0)
+  Log(x, base, [prec])    - Logarithm of x in given base
+
+TRIGONOMETRIC (radians):
+  Sin(x, [precision])     - Sine of x
+  Cos(x, [precision])     - Cosine of x
+  Tan(x, [precision])     - Tangent of x
+
+INVERSE TRIGONOMETRIC:
+  Arcsin(x, [prec])       - Inverse sine (|x| ≤ 1)
+  Arccos(x, [prec])       - Inverse cosine (|x| ≤ 1)
+  Arctan(x, [prec])       - Inverse tangent
+
+ROOTS & POWERS:
+  Root(q, n, [prec])      - nth root of q
+  Pow(base, exp, [prec])  - base^exponent (fractional exponents)
+
+PRECISION:
+  Precision can be specified as:
+  - Negative integer: 10^n (e.g., -6 means 10^-6 = 0.000001)
+  - Positive integer: 1/n (e.g., 6 means 1/6)
+
+EXAMPLES:
+  PI()                    → 3.14159... (default precision)
+  PI(-10)                 → Higher precision (10^-10)
+  Sin(PI()/6)             → 0.5 (sin 30°)
+  Exp(1)                  → e ≈ 2.71828...
+  Ln(E())                 → 1
+  Root(8, 3)              → 2 (cube root of 8)
+
+USAGE:
+  First load the package: LOAD reals
+  Then use functions: Sin(PI()/4)
