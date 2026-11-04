@@ -3,7 +3,8 @@ import { Rational, RationalInterval, Integer } from "@ratmath/core";
 const DEFAULT_PRECISION = -6; // 10^-6
 
 // Continued fraction coefficients for mathematical constants
-const LN2_CF = [0, 1, 2, 3, 1, 6, 3, 1, 1, 2, 1, 1, 6, 1, 6, 1, 1, 4, 1, 2, 4, 1, 1, 1, 1, 1, 1, 1, 3, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+// ln 2 = [0; 1, 2, 3, 1, 6, 3, ...] (OEIS A016730), from a 100-digit value.
+const LN2_CF = [0, 1, 2, 3, 1, 6, 3, 1, 1, 2, 1, 1, 1, 1, 3, 10, 1, 1, 1, 2, 1, 1, 1, 1, 3, 2, 3, 1, 13, 7, 4, 1, 1, 1, 7, 2, 4, 1, 1, 2, 5, 14, 1, 10, 1, 4, 2, 18, 3, 1, 4, 1, 6, 2, 7, 3, 3, 1, 13, 3, 1, 4, 4, 1, 3, 1, 1, 1, 1, 2, 17, 3, 1, 2, 32, 1, 1, 1, 1, 3, 1, 4, 5, 1, 1, 4, 1, 3, 9, 8, 1, 1, 7, 1, 1, 1, 1, 1, 1, 1];
 const PI_CF = [3, 7, 15, 1, 292, 1, 1, 1, 2, 1, 3, 1, 14, 2, 1, 1, 2, 2, 2, 2, 1, 84, 2, 1, 1, 15, 3, 13, 1, 4, 2, 6, 6, 99, 1, 2, 2, 6, 3, 5, 1, 1, 6, 8, 1, 7, 1, 2, 3, 7, 1, 2, 1, 1, 12, 1, 1, 1, 3, 1, 1, 8, 1, 1, 2, 1, 6];
 const E_CF = [2, 1, 2, 1, 1, 4, 1, 1, 6, 1, 1, 8, 1, 1, 10, 1, 1, 12, 1, 1, 14, 1, 1, 16, 1, 1, 18, 1, 1, 20, 1, 1, 22, 1, 1, 24, 1, 1, 26, 1, 1, 28, 1, 1, 30, 1, 1, 32, 1, 1, 34, 1, 1, 36, 1, 1, 38, 1, 1, 40];
 
@@ -154,6 +155,61 @@ function getConstant(cfCoefficients, precision) {
     return new RationalInterval(lower, upper);
 }
 
+
+// Grid 1/2^b with 2^-b <= epsilon/64: fine enough that snapping a reduced
+// argument costs far less than the requested precision.
+function dyadicGrid(epsilon) {
+    let denominator = 1n;
+    const target = epsilon.divide(new Rational(64));
+    while (new Rational(1n, denominator).compareTo(target) > 0) denominator <<= 1n;
+    return denominator;
+}
+
+function snapDown(value, denominator) {
+    return new Rational(floorDiv(value.numerator * denominator, value.denominator), denominator);
+}
+
+function snapUp(value, denominator) {
+    return new Rational(-floorDiv(-value.numerator * denominator, value.denominator), denominator);
+}
+
+function floorDiv(a, b) {
+    const q = a / b;
+    return (a % b !== 0n && (a < 0n) !== (b < 0n)) ? q - 1n : q;
+}
+
+// Enclosure of exp(r) for |r| < 1 by Taylor series. After the last added
+// term t_n, the tail is at most |t_n| * sum (|r|/(n+1))^j <= 2|t_n|.
+function expSeriesBounds(r, tolerance) {
+    let sum = new Rational(1);
+    let term = new Rational(1);
+    let n = 0;
+    do {
+        n++;
+        term = term.multiply(r).divide(new Rational(n));
+        sum = sum.add(term);
+    } while (term.abs().compareTo(tolerance) > 0);
+    const errorBound = term.abs().multiply(new Rational(2));
+    return new RationalInterval(sum.subtract(errorBound), sum.add(errorBound));
+}
+
+// Enclosure of atanh(z) = sum z^(2j+1)/(2j+1) for 0 <= z < 1/2. All terms are
+// nonnegative; the tail after the power p = z^(2n+1) is below p z^2/(1-z^2).
+function atanhSeriesBounds(z, tolerance) {
+    let sum = new Rational(0);
+    let power = z;
+    const zSquared = z.multiply(z);
+    let n = 0;
+    let tail;
+    do {
+        sum = sum.add(power.divide(new Rational(2 * n + 1)));
+        power = power.multiply(zSquared);
+        n++;
+        tail = power.divide(new Rational(1).subtract(zSquared));
+    } while (tail.compareTo(tolerance) > 0);
+    return new RationalInterval(sum, sum.add(tail));
+}
+
 // Constants
 export const PI = (precision) => getConstant(PI_CF, precision);
 export const E = (precision) => getConstant(E_CF, precision);
@@ -184,60 +240,23 @@ export function EXP(x, precision) {
         return new RationalInterval(new Rational(1), new Rational(1));
     }
 
-    // Decompose x = k*ln(2) + r where r in [0, ln(2))
+    // exp(x) = 2^k * exp(x - k ln 2). The reduced argument is an interval
+    // because ln 2 is only known as an enclosure; both ends are snapped
+    // outward to a dyadic grid so the Taylor terms stay small.
     const ln2Interval = getConstant(LN2_CF, precision);
     const ln2Approx = ln2Interval.low.add(ln2Interval.high).divide(new Rational(2));
-
     const k = floor(x.divide(ln2Approx));
-    const r = x.subtract(k.multiply(ln2Approx));
-
-    // If r is negative due to approximation error, adjust k
-    if (isNegative(r)) {
-        const kAdjusted = k.subtract(new Rational(1));
-        const rAdjusted = x.subtract(kAdjusted.multiply(ln2Approx));
-        return EXP(rAdjusted, precision).multiply(new Rational(new Integer(2).pow(kAdjusted.numerator >= 0n ? kAdjusted.numerator : -kAdjusted.numerator).value, 1));
-    }
-
-    // For better precision, use a hybrid approach
-    // Try exact rational computation first, fall back to controlled precision
-    let expR;
-
-    // First try exact computation with limited iterations
-    let sum = new Rational(1);
-    let term = new Rational(1);
-    let n = 1;
-    let converged = false;
-
-    // More conservative iteration limit to prevent fraction explosion
-    while (term.abs().compareTo(epsilon) > 0 && n < 50) {
-        term = term.multiply(r).divide(new Rational(n));
-        sum = sum.add(term);
-        n++;
-
-        // Check for convergence or fraction explosion
-        if (sum.denominator > 1000000000n || term.denominator > 1000000000n) {
-            break;
-        }
-
-        if (term.abs().compareTo(epsilon) <= 0) {
-            converged = true;
-            break;
-        }
-    }
-
-    if (converged && sum.denominator <= 1000000000n) {
-        // Use exact result with proper error bounds
-        const errorBound = term.abs().multiply(new Rational(2));
-        expR = new RationalInterval(
-            sum.subtract(errorBound),
-            sum.add(errorBound)
-        );
-    } else {
-        // Fall back to high-precision decimal approximation
-        const rDecimal = r.toNumber();
-        const expRDecimal = Math.exp(rDecimal);
-        expR = createTightRationalInterval(expRDecimal, precision);
-    }
+    const [ln2ForLow, ln2ForHigh] = isNegative(k)
+        ? [ln2Interval.low, ln2Interval.high]
+        : [ln2Interval.high, ln2Interval.low];
+    const grid = dyadicGrid(epsilon);
+    const rLow = snapDown(x.subtract(k.multiply(ln2ForLow)), grid);
+    const rHigh = snapUp(x.subtract(k.multiply(ln2ForHigh)), grid);
+    const tolerance = epsilon.divide(new Rational(8));
+    const expR = new RationalInterval(
+        expSeriesBounds(rLow, tolerance).low,
+        expSeriesBounds(rHigh, tolerance).high
+    );
 
     // Multiply by 2^k
     if (isZero(k)) {
@@ -296,47 +315,16 @@ export function LN(x, precision) {
         }
     }
 
-    // Now xScaled (m) is in [1, 2)
-    // Use Taylor series for ln(1 + y) where y = m - 1
-    const y = xScaled.subtract(new Rational(1));
-
-    // Use hybrid approach for better precision
-    let lnM;
-    let sum = new Rational(0);
-    let term = y;
-    let n = 1;
-    let converged = false;
-
-    // Try exact computation with limited iterations
-    while (term.abs().compareTo(epsilon) > 0 && n < 50) {
-        sum = sum.add(term.divide(new Rational(n)));
-        n++;
-        term = term.multiply(y).negate();
-
-        // Check for convergence or fraction explosion
-        if (sum.denominator > 1000000000n || term.denominator > 1000000000n) {
-            break;
-        }
-
-        if (term.abs().compareTo(epsilon) <= 0) {
-            converged = true;
-            break;
-        }
-    }
-
-    if (converged && sum.denominator <= 1000000000n) {
-        // Use exact result
-        const errorBound = term.abs().divide(new Rational(n));
-        lnM = new RationalInterval(
-            sum.subtract(errorBound),
-            sum.add(errorBound)
-        );
-    } else {
-        // Fall back to high-precision decimal approximation
-        const xScaledDecimal = xScaled.toNumber();
-        const lnMDecimal = Math.log(xScaledDecimal);
-        lnM = createTightRationalInterval(lnMDecimal, precision);
-    }
+    // Now xScaled (m) is in [1, 2). ln(m) = 2 atanh(z) with z = (m-1)/(m+1)
+    // in [0, 1/3); z is snapped outward to a dyadic grid, and atanh is
+    // increasing, so the two series bounds enclose ln(m).
+    const z = xScaled.subtract(new Rational(1)).divide(xScaled.add(new Rational(1)));
+    const grid = dyadicGrid(epsilon);
+    const tolerance = epsilon.divide(new Rational(8));
+    const lnM = new RationalInterval(
+        atanhSeriesBounds(snapDown(z, grid), tolerance).low.multiply(new Rational(2)),
+        atanhSeriesBounds(snapUp(z, grid), tolerance).high.multiply(new Rational(2))
+    );
 
     // Add k * ln(2)
     if (k === 0) {
